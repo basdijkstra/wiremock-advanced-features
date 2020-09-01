@@ -1,6 +1,8 @@
 package extendingwiremock;
 
+import com.github.tomakehurst.wiremock.client.VerificationException;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.specification.RequestSpecification;
@@ -10,13 +12,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static io.restassured.RestAssured.given;
 
-public class RequestFiltering {
+public class ContentTypeMatching {
 
     private RequestSpecification requestSpec;
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(
-            new WireMockConfiguration().port(9876).extensions(new BasicAuthRequestFilter())
+            new WireMockConfiguration().port(9876).extensions(new ContentTypeMatcher())
     );
 
     @Before
@@ -28,47 +30,50 @@ public class RequestFiltering {
                 build();
     }
 
-    public void stubForRequestFiltering() {
+    public void stubForContentTypeMatching() {
 
-        stubFor(get(urlEqualTo("/request-filtering"))
+        stubFor(requestMatching(
+                "content-type-matcher",
+                Parameters.one("Content-Type", "application/xml")
+        )
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withBody("Authorized")
+                        .withBody("Content-Type is XML")
                 ));
     }
 
     @Test
-    public void callWireMockWithCorrectCredentials_checkStatusCodeEquals200() {
+    public void callWireMockWithXmlRequest_checkStatusCodeEquals200() {
 
-        stubForRequestFiltering();
+        stubForContentTypeMatching();
 
         given().
                 spec(requestSpec).
         and().
-                auth().preemptive().basic("username","password").
+                contentType("application/xml").
         when().
-                get("/request-filtering").
+                get("/content-type-matching").
         then().
                 assertThat().
                 statusCode(200).
         and().
-                body(org.hamcrest.Matchers.equalTo("Authorized"));
+                body(org.hamcrest.Matchers.equalTo("Content-Type is XML"));
     }
 
     @Test
-    public void callWireMockWithIncorrectCredentials_checkStatusCodeEquals401() {
+    public void callWireMockWithJsonRequest_checkStatusCodeEquals404() {
 
-        stubForRequestFiltering();
+        /**
+         * This test throws a VerificationException because there is no matching stub for it
+         */
+
+        stubForContentTypeMatching();
 
         given().
                 spec(requestSpec).
         and().
-                auth().preemptive().basic("username","incorrectpassword").
+                contentType("application/json").
         when().
-                get("/request-filtering").
-        then().
-                assertThat().
-                statusCode(401);
+                get("/content-type-matching");
     }
-
 }
